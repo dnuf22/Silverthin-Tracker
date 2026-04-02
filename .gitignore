@@ -1,4 +1,3 @@
 node_modules/
-silverthin.db
-silverthin.db-wal
-silverthin.db-shm
+.vercel/
+.env

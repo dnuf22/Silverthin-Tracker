@@ -1,19 +1,11 @@
 {
   "name": "silverthin-tracker",
   "version": "1.0.0",
-  "description": "",
-  "main": "index.js",
+  "description": "Silverthin Project Tracker",
   "scripts": {
-    "start": "node server.js",
-    "test": "echo \"Error: no test specified\" && exit 1"
+    "seed": "node seed.js"
   },
-  "keywords": [],
-  "author": "",
-  "license": "ISC",
-  "type": "commonjs",
   "dependencies": {
-    "better-sqlite3": "^12.8.0",
-    "cors": "^2.8.6",
-    "express": "^5.2.1"
+    "@libsql/client": "^0.17.2"
   }
 }
