@@ -79,6 +79,7 @@ function App() {
   const [sortD, setSortD] = useState("asc");
   const [toast, setToast] = useState(null);
   const [repFilter, setRepFilter] = useState("__all__");
+  const [hoverFunnel, setHoverFunnel] = useState(null);
 
   const isManager = user === "__manager__";
   const flash = useCallback((m,t="success")=>{setToast({m,t});setTimeout(()=>setToast(null),3000)},[]);
@@ -148,8 +149,10 @@ function App() {
   };
 
   const pipeSource = isManager&&repFilter!=="__all__" ? projects.filter(p=>p.rep===repFilter) : myProjects;
-  const pipe=STATUSES.filter(s=>!s.includes("Closed")).map(s=>{const items=pipeSource.filter(p=>p.status===s);return{status:s,count:items.length,value:items.reduce((a,b)=>a+(Number(b.opportunitySize)||0),0)}});
+  const FUNNEL_STAGES = ["1. New Opportunity","2. Quoting","3. Technical Discussion","4. Prototypes Ordered","5. Testing","6. Awaiting Production PO"];
+  const pipe=FUNNEL_STAGES.map(s=>{const items=pipeSource.filter(p=>p.status===s);return{status:s,count:items.length,value:items.reduce((a,b)=>a+(Number(b.opportunitySize)||0),0)}});
   const totPipe=pipe.reduce((a,b)=>a+b.value,0);const totAct=pipe.reduce((a,b)=>a+b.count,0);
+  const maxFunnelVal = Math.max(...pipe.map(p=>p.value),1);
 
   const IS={width:"100%",background:"#0F172A",border:"1px solid #334155",color:"#E2E8F0",padding:"8px",borderRadius:6,fontSize:14,boxSizing:"border-box"};
   const LS={fontSize:12,color:"#94A3B8",display:"block",marginBottom:3};
@@ -211,8 +214,52 @@ function App() {
 
       {/* Main */}
       <div style={{padding:"16px 24px",paddingBottom:80}}>
-        {view==="pipeline"?<div style={{display:"grid",gridTemplateColumns:"repeat(auto-fill,minmax(260px,1fr))",gap:12}}>
-          {pipe.map(col=><div key={col.status} style={{background:"#1E293B",borderRadius:12,border:"1px solid #334155",overflow:"hidden"}}>
+        {view==="pipeline"?<div>
+          {/* Funnel */}
+          <div style={{display:"flex",flexDirection:"column",alignItems:"center",marginBottom:24,gap:0}}>
+            {pipe.map((stage,i)=>{
+              const widthPct = Math.max(stage.value / maxFunnelVal * 100, 15);
+              const sc = SC[stage.status];
+              const isHovered = hoverFunnel === stage.status;
+              const isActive = fStatus === stage.status;
+              return <div key={stage.status} style={{width:"100%",display:"flex",justifyContent:"center"}}>
+                <div
+                  onClick={()=>setFStatus(f=>f===stage.status?"__all__":stage.status)}
+                  onMouseEnter={()=>setHoverFunnel(stage.status)}
+                  onMouseLeave={()=>setHoverFunnel(null)}
+                  style={{
+                    width:`${widthPct}%`,minWidth:120,
+                    background:isActive?sc.br:`linear-gradient(135deg, ${sc.bg}, ${sc.br}22)`,
+                    border:`1px solid ${isHovered||isActive?sc.br:sc.br+"66"}`,
+                    borderBottom:i<pipe.length-1?"none":undefined,
+                    padding:"12px 16px",
+                    cursor:"pointer",
+                    transition:"all .2s ease",
+                    transform:isHovered?"scale(1.02)":"scale(1)",
+                    position:"relative",
+                    textAlign:"center",
+                    borderRadius:i===0?"12px 12px 0 0":i===pipe.length-1?"0 0 12px 12px":"0",
+                  }}
+                >
+                  <div style={{fontSize:13,fontWeight:700,color:isActive?"#fff":sc.tx,letterSpacing:"-.01em"}}>{stage.status.split(". ")[1]}</div>
+                  <div style={{fontSize:12,fontWeight:600,color:isActive?"rgba(255,255,255,.85)":sc.tx+"BB",marginTop:2}}>{fmt(stage.value)}</div>
+                  {isHovered&&!isActive&&<div style={{
+                    position:"absolute",top:"50%",left:"100%",transform:"translateY(-50%)",marginLeft:12,
+                    background:"#1E293B",border:"1px solid #334155",borderRadius:8,padding:"8px 12px",
+                    whiteSpace:"nowrap",zIndex:10,boxShadow:"0 4px 12px rgba(0,0,0,.4)",
+                    fontSize:12,color:"#E2E8F0"
+                  }}>
+                    <div style={{fontWeight:600,color:sc.tx}}>{fmt(stage.value)}</div>
+                    <div style={{color:"#94A3B8",marginTop:2}}>{stage.count} project{stage.count!==1?"s":""}</div>
+                  </div>}
+                </div>
+              </div>;
+            })}
+            {fStatus!=="__all__"&&FUNNEL_STAGES.includes(fStatus)&&<button onClick={()=>setFStatus("__all__")} style={{marginTop:10,background:"transparent",border:"1px solid #334155",color:"#94A3B8",padding:"4px 12px",borderRadius:6,cursor:"pointer",fontSize:11}}>Clear filter</button>}
+          </div>
+          {/* Pipeline Kanban */}
+          <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fill,minmax(260px,1fr))",gap:12}}>
+          {pipe.filter(col=>fStatus==="__all__"||col.status===fStatus).map(col=><div key={col.status} style={{background:"#1E293B",borderRadius:12,border:"1px solid #334155",overflow:"hidden"}}>
             <div style={{padding:"10px 14px",borderBottom:"1px solid #334155",display:"flex",justifyContent:"space-between",alignItems:"center"}}>
               <div><div style={{fontSize:13,fontWeight:600,color:SC[col.status]?.tx}}>{col.status.split(". ")[1]}</div><div style={{fontSize:12,color:"#64748B"}}>{col.count} &middot; {fmt(col.value)}</div></div>
               <div style={{background:SC[col.status]?.bg,color:SC[col.status]?.tx,padding:"2px 8px",borderRadius:20,fontSize:13,fontWeight:700}}>{col.count}</div>
@@ -225,7 +272,7 @@ function App() {
               </div>)}
             </div>
           </div>)}
-        </div>:
+        </div></div>:
         <div>
           <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:12}}>
             <div style={{fontSize:13,color:"#64748B"}}>Showing {filtered.length} projects</div>
