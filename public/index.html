@@ -218,47 +218,82 @@ function App() {
       {/* Main */}
       <div style={{padding:"16px 24px",paddingBottom:80}}>
         {view==="pipeline"?<div>
-          {/* Funnel */}
-          <div style={{display:"flex",flexDirection:"column",alignItems:"center",marginBottom:24,gap:0}}>
-            {pipe.map((stage,i)=>{
-              const widthPct = funnelWidths[stage.status] || 30;
-              const sc = SC[stage.status];
-              const isHovered = hoverFunnel === stage.status;
-              const isActive = fStatus === stage.status;
-              return <div key={stage.status} style={{width:"100%",display:"flex",justifyContent:"center"}}>
-                <div
-                  onClick={()=>setFStatus(f=>f===stage.status?"__all__":stage.status)}
-                  onMouseEnter={()=>setHoverFunnel(stage.status)}
-                  onMouseLeave={()=>setHoverFunnel(null)}
-                  style={{
-                    width:`${widthPct}%`,minWidth:120,
-                    background:isActive?sc.br:`linear-gradient(135deg, ${sc.bg}, ${sc.br}22)`,
-                    border:`1px solid ${isHovered||isActive?sc.br:sc.br+"66"}`,
-                    borderBottom:i<pipe.length-1?"none":undefined,
-                    padding:"12px 16px",
-                    cursor:"pointer",
-                    transition:"all .2s ease",
-                    transform:isHovered?"scale(1.02)":"scale(1)",
-                    position:"relative",
-                    textAlign:"center",
-                    borderRadius:i===0?"12px 12px 0 0":i===pipe.length-1?"0 0 12px 12px":"0",
-                  }}
-                >
-                  <div style={{fontSize:13,fontWeight:700,color:isActive?"#fff":sc.tx,letterSpacing:"-.01em"}}>{stage.status.split(". ")[1]}</div>
-                  <div style={{fontSize:12,fontWeight:600,color:isActive?"rgba(255,255,255,.85)":sc.tx+"BB",marginTop:2}}>{fmt(stage.value)}</div>
-                  {isHovered&&!isActive&&<div style={{
-                    position:"absolute",top:"50%",left:"100%",transform:"translateY(-50%)",marginLeft:12,
-                    background:"#1E293B",border:"1px solid #334155",borderRadius:8,padding:"8px 12px",
-                    whiteSpace:"nowrap",zIndex:10,boxShadow:"0 4px 12px rgba(0,0,0,.4)",
-                    fontSize:12,color:"#E2E8F0"
-                  }}>
-                    <div style={{fontWeight:600,color:sc.tx}}>{fmt(stage.value)}</div>
-                    <div style={{color:"#94A3B8",marginTop:2}}>{stage.count} project{stage.count!==1?"s":""}</div>
-                  </div>}
+          {/* Funnel + Rep Bar Chart */}
+          <div style={{display:"flex",gap:24,marginBottom:24,flexWrap:"wrap"}}>
+            {/* Funnel */}
+            <div style={{flex:"1 1 400px",display:"flex",flexDirection:"column",alignItems:"center",gap:0}}>
+              <div style={{fontSize:14,fontWeight:700,color:"#F8FAFC",marginBottom:12,alignSelf:"flex-start"}}>Pipeline Funnel</div>
+              {pipe.map((stage,i)=>{
+                const widthPct = funnelWidths[stage.status] || 30;
+                const sc = SC[stage.status];
+                const isHovered = hoverFunnel === stage.status;
+                const isActive = fStatus === stage.status;
+                return <div key={stage.status} style={{width:"100%",display:"flex",justifyContent:"center"}}>
+                  <div
+                    onClick={()=>setFStatus(f=>f===stage.status?"__all__":stage.status)}
+                    onMouseEnter={()=>setHoverFunnel(stage.status)}
+                    onMouseLeave={()=>setHoverFunnel(null)}
+                    style={{
+                      width:`${widthPct}%`,minWidth:120,
+                      background:isActive?sc.br:`linear-gradient(135deg, ${sc.bg}, ${sc.br}22)`,
+                      border:`1px solid ${isHovered||isActive?sc.br:sc.br+"66"}`,
+                      borderBottom:i<pipe.length-1?"none":undefined,
+                      padding:"12px 16px",
+                      cursor:"pointer",
+                      transition:"all .2s ease",
+                      transform:isHovered?"scale(1.02)":"scale(1)",
+                      position:"relative",
+                      textAlign:"center",
+                      borderRadius:i===0?"12px 12px 0 0":i===pipe.length-1?"0 0 12px 12px":"0",
+                    }}
+                  >
+                    <div style={{fontSize:13,fontWeight:700,color:isActive?"#fff":sc.tx,letterSpacing:"-.01em"}}>{stage.status.split(". ")[1]}</div>
+                    <div style={{fontSize:12,fontWeight:600,color:isActive?"rgba(255,255,255,.85)":sc.tx+"BB",marginTop:2}}>{fmt(stage.value)}</div>
+                    {isHovered&&!isActive&&<div style={{
+                      position:"absolute",top:"50%",left:"100%",transform:"translateY(-50%)",marginLeft:12,
+                      background:"#1E293B",border:"1px solid #334155",borderRadius:8,padding:"8px 12px",
+                      whiteSpace:"nowrap",zIndex:10,boxShadow:"0 4px 12px rgba(0,0,0,.4)",
+                      fontSize:12,color:"#E2E8F0"
+                    }}>
+                      <div style={{fontWeight:600,color:sc.tx}}>{fmt(stage.value)}</div>
+                      <div style={{color:"#94A3B8",marginTop:2}}>{stage.count} project{stage.count!==1?"s":""}</div>
+                    </div>}
+                  </div>
+                </div>;
+              })}
+              {fStatus!=="__all__"&&FUNNEL_STAGES.includes(fStatus)&&<button onClick={()=>setFStatus("__all__")} style={{marginTop:10,background:"transparent",border:"1px solid #334155",color:"#94A3B8",padding:"4px 12px",borderRadius:6,cursor:"pointer",fontSize:11}}>Clear filter</button>}
+            </div>
+            {/* Rep Bar Chart */}
+            {(()=>{
+              const repData = REPS.map(r=>{
+                const items = pipeSource.filter(p=>p.rep===r&&!p.status.includes("Closed")&&p.status!=="7. On Hold");
+                return {rep:r, value:items.reduce((a,b)=>a+(Number(b.opportunitySize)||0),0), count:items.length};
+              }).filter(r=>r.value>0).sort((a,b)=>b.value-a.value);
+              const maxRepVal = Math.max(...repData.map(r=>r.value),1);
+              return <div style={{flex:"1 1 400px",background:"#1E293B",borderRadius:12,border:"1px solid #334155",padding:16}}>
+                <div style={{fontSize:14,fontWeight:700,color:"#F8FAFC",marginBottom:12}}>Opportunities by Rep</div>
+                <div style={{display:"flex",flexDirection:"column",gap:6}}>
+                  {repData.map(r=><div key={r.rep}>
+                    <div style={{display:"flex",justifyContent:"space-between",marginBottom:3}}>
+                      <span style={{fontSize:12,color:"#E2E8F0",fontWeight:500}}>{r.rep}</span>
+                      <span style={{fontSize:12,color:"#3B82F6",fontWeight:600}}>{fmt(r.value)}</span>
+                    </div>
+                    <div style={{background:"#0F172A",borderRadius:4,height:20,overflow:"hidden",position:"relative"}}>
+                      <div style={{
+                        width:`${(r.value/maxRepVal)*100}%`,
+                        height:"100%",
+                        background:"linear-gradient(90deg, #3B82F6, #60A5FA)",
+                        borderRadius:4,
+                        transition:"width .3s ease",
+                        display:"flex",alignItems:"center",justifyContent:"flex-end",paddingRight:6,
+                      }}>
+                        <span style={{fontSize:10,color:"#fff",fontWeight:600,whiteSpace:"nowrap"}}>{r.count} proj</span>
+                      </div>
+                    </div>
+                  </div>)}
                 </div>
               </div>;
-            })}
-            {fStatus!=="__all__"&&FUNNEL_STAGES.includes(fStatus)&&<button onClick={()=>setFStatus("__all__")} style={{marginTop:10,background:"transparent",border:"1px solid #334155",color:"#94A3B8",padding:"4px 12px",borderRadius:6,cursor:"pointer",fontSize:11}}>Clear filter</button>}
+            })()}
           </div>
           {/* Pipeline Kanban */}
           <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fill,minmax(260px,1fr))",gap:12}}>
