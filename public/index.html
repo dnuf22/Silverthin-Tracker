@@ -1,0 +1,294 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Silverthin Project Tracker</title>
+  <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet"/>
+  <style>
+    *{box-sizing:border-box;margin:0;padding:0}
+    body{font-family:'DM Sans',sans-serif;background:#0F172A;color:#E2E8F0;min-height:100vh}
+    @keyframes slideIn{from{transform:translateX(100px);opacity:0}to{transform:translateX(0);opacity:1}}
+    select,input,textarea{font-family:inherit}
+    input:focus,select:focus,textarea:focus{outline:none;border-color:#3B82F6!important;box-shadow:0 0 0 3px rgba(59,130,246,.2)}
+    ::-webkit-scrollbar{width:6px}
+    ::-webkit-scrollbar-track{background:transparent}
+    ::-webkit-scrollbar-thumb{background:#334155;border-radius:3px}
+  </style>
+</head>
+<body>
+  <div id="root"></div>
+  <script src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
+  <script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
+  <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+  <script type="text/babel">
+const { useState, useEffect, useCallback } = React;
+
+const API = window.location.origin + '/api';
+
+const REPS = ["Adam Prey","Brad","Brandon","Dimitri","EPI","House","Innovative Industrial Motion","John","Mechatronics","Scot","SemiAero","Southern Sales Unlimited","Zach"];
+const STATUSES = ["1. New Opportunity","2. Quoting","3. Technical Discussion","4. Prototypes Ordered","5. Testing","6. Awaiting Production PO","7. On Hold","8. Closed Lost","9. Closed Won"];
+const CONF = ["High","Medium","Low"];
+const PTYPES = ["Thin Section","Slewing Rings","Custom Bearing","Pinion","Assembly","Other"];
+const SC = {"1. New Opportunity":{bg:"#EFF6FF",br:"#3B82F6",tx:"#1E40AF"},"2. Quoting":{bg:"#FFF7ED",br:"#F97316",tx:"#9A3412"},"3. Technical Discussion":{bg:"#F5F3FF",br:"#8B5CF6",tx:"#5B21B6"},"4. Prototypes Ordered":{bg:"#ECFDF5",br:"#10B981",tx:"#065F46"},"5. Testing":{bg:"#FEF9C3",br:"#EAB308",tx:"#854D0E"},"6. Awaiting Production PO":{bg:"#FCE7F3",br:"#EC4899",tx:"#9D174D"},"7. On Hold":{bg:"#F1F5F9",br:"#94A3B8",tx:"#475569"},"8. Closed Lost":{bg:"#FEE2E2",br:"#EF4444",tx:"#991B1B"},"9. Closed Won":{bg:"#D1FAE5",br:"#059669",tx:"#064E3B"}};
+const fmt = n => n ? `$${Number(n).toLocaleString("en-US",{maximumFractionDigits:0})}` : "";
+
+function LoginScreen({onSelect, projectCounts}) {
+  return (
+    <div style={{background:"#0F172A",minHeight:"100vh",display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",padding:24}}>
+      <div style={{marginBottom:40,textAlign:"center"}}>
+        <div style={{fontSize:32,fontWeight:700,color:"#F8FAFC",letterSpacing:"-.03em",marginBottom:8}}>Silverthin Project Tracker</div>
+        <div style={{fontSize:16,color:"#64748B"}}>Select your name to view your projects</div>
+      </div>
+      <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fill,minmax(220px,1fr))",gap:10,width:"100%",maxWidth:740}}>
+        {REPS.map(r => {
+          const count = projectCounts[r] || 0;
+          return <button key={r} onClick={()=>onSelect(r)} style={{background:"#1E293B",border:"1px solid #334155",color:"#F8FAFC",padding:"16px 20px",borderRadius:12,cursor:"pointer",fontSize:15,fontWeight:600,textAlign:"left",transition:"all .15s",display:"flex",justifyContent:"space-between",alignItems:"center"}}
+            onMouseEnter={e=>{e.currentTarget.style.borderColor="#3B82F6";e.currentTarget.style.background="#1E3A5F"}}
+            onMouseLeave={e=>{e.currentTarget.style.borderColor="#334155";e.currentTarget.style.background="#1E293B"}}>
+            <span>{r}</span>
+            <span style={{background:"#334155",color:"#94A3B8",padding:"2px 8px",borderRadius:12,fontSize:12}}>{count}</span>
+          </button>;
+        })}
+      </div>
+      <button onClick={()=>onSelect("__manager__")} style={{marginTop:24,background:"linear-gradient(135deg,#1E40AF,#7C3AED)",border:"none",color:"#fff",padding:"16px 40px",borderRadius:12,cursor:"pointer",fontSize:16,fontWeight:700,letterSpacing:"-.01em",boxShadow:"0 4px 20px rgba(59,130,246,.3)",transition:"transform .15s"}}
+        onMouseEnter={e=>e.currentTarget.style.transform="scale(1.03)"}
+        onMouseLeave={e=>e.currentTarget.style.transform="scale(1)"}>
+        Manager View (All Reps)
+      </button>
+      <div style={{marginTop:16,fontSize:12,color:"#475569"}}>Your selection will be remembered</div>
+    </div>
+  );
+}
+
+function App() {
+  const [user, setUser] = useState(()=>localStorage.getItem("st_user")||null);
+  const [projects, setProjects] = useState([]);
+  const [view, setView] = useState("list");
+  const [editId, setEditId] = useState(null);
+  const [ed, setEd] = useState({});
+  const [fStatus, setFStatus] = useState("__all__");
+  const [search, setSearch] = useState("");
+  const [loading, setLoading] = useState(true);
+  const [histId, setHistId] = useState(null);
+  const [histData, setHistData] = useState([]);
+  const [adding, setAdding] = useState(false);
+  const [newP, setNewP] = useState({});
+  const [saving, setSaving] = useState(false);
+  const [sortF, setSortF] = useState("customer");
+  const [sortD, setSortD] = useState("asc");
+  const [toast, setToast] = useState(null);
+  const [repFilter, setRepFilter] = useState("__all__");
+
+  const isManager = user === "__manager__";
+  const flash = useCallback((m,t="success")=>{setToast({m,t});setTimeout(()=>setToast(null),3000)},[]);
+
+  // Load projects from API
+  useEffect(()=>{
+    fetch(API+'/projects').then(r=>r.json()).then(data=>{setProjects(data);setLoading(false)}).catch(()=>setLoading(false));
+  },[]);
+
+  // Compute counts for login screen
+  const projectCounts = {};
+  projects.forEach(p=>{projectCounts[p.rep]=(projectCounts[p.rep]||0)+1});
+
+  const handleLogin = (rep)=>{localStorage.setItem("st_user",rep);setUser(rep)};
+  const handleLogout = ()=>{localStorage.removeItem("st_user");setUser(null)};
+
+  if(loading) return <div style={{display:"flex",justifyContent:"center",alignItems:"center",height:"100vh",background:"#0F172A",color:"#94A3B8"}}>Loading...</div>;
+  if(!user) return <LoginScreen onSelect={handleLogin} projectCounts={projectCounts}/>;
+
+  const myProjects = isManager ? projects : projects.filter(p=>p.rep===user);
+  const displayProjects = isManager && repFilter!=="__all__" ? myProjects.filter(p=>p.rep===repFilter) : myProjects;
+
+  const filtered = displayProjects.filter(p=>{
+    if(fStatus!=="__all__"&&p.status!==fStatus)return false;
+    if(search){const s=search.toLowerCase();return p.customer.toLowerCase().includes(s)||p.application.toLowerCase().includes(s)||p.partNumber.toLowerCase().includes(s)||(p.update||"").toLowerCase().includes(s)}
+    return true;
+  }).sort((a,b)=>{
+    let va=a[sortF]||"",vb=b[sortF]||"";
+    if(sortF==="opportunitySize"){va=Number(va)||0;vb=Number(vb)||0}
+    if(typeof va==="string"){va=va.toLowerCase();vb=vb.toLowerCase()}
+    return sortD==="asc"?(va<vb?-1:va>vb?1:0):(va>vb?-1:va<vb?1:0);
+  });
+
+  const startEdit=p=>{setEditId(p.id);setEd({...p})};
+  const saveEdit=async()=>{
+    setSaving(true);
+    try{
+      const resp = await fetch(API+'/projects/'+editId,{method:'PUT',headers:{'Content-Type':'application/json'},body:JSON.stringify({...ed,changedBy:user})});
+      const updated = await resp.json();
+      setProjects(prev=>prev.map(p=>p.id===editId?updated:p));
+      setEditId(null);flash(`${ed.customer} updated`);
+    }catch(e){flash("Save failed","error")}
+    setSaving(false);
+  };
+  const openHist=async id=>{
+    try{const resp=await fetch(API+'/projects/'+id+'/history');const h=await resp.json();setHistData(h);setHistId(id)}catch{setHistData([]);setHistId(id)}
+  };
+  const addProj=async()=>{
+    setSaving(true);
+    const p={rep:isManager?(repFilter!=="__all__"?repFilter:REPS[0]):user,dateStarted:new Date().toISOString().split("T")[0],customer:"",distributor:"",application:"",productType:"Thin Section",partNumber:"",quoteNumber:"",eau:"",opportunitySize:0,city:"",state:"",country:"USA",closeDate:"",competitor:"",lastVisit:"",confidence:"",status:"1. New Opportunity",update:"",...newP};
+    try{
+      const resp=await fetch(API+'/projects',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(p)});
+      const created=await resp.json();
+      setProjects(prev=>[...prev,created]);setAdding(false);setNewP({});flash("New project added");startEdit(created);
+    }catch(e){flash("Add failed","error")}
+    setSaving(false);
+  };
+  const resetAll=async()=>{
+    if(!confirm("Reset all data to original? Cannot be undone."))return;
+    setLoading(true);
+    try{
+      await fetch(API+'/reset',{method:'POST'});
+      const resp=await fetch(API+'/projects');const data=await resp.json();
+      setProjects(data);flash("Data reset","info");
+    }catch(e){flash("Reset failed","error")}
+    setLoading(false);
+  };
+
+  const pipeSource = isManager&&repFilter!=="__all__" ? projects.filter(p=>p.rep===repFilter) : myProjects;
+  const pipe=STATUSES.filter(s=>!s.includes("Closed")).map(s=>{const items=pipeSource.filter(p=>p.status===s);return{status:s,count:items.length,value:items.reduce((a,b)=>a+(Number(b.opportunitySize)||0),0)}});
+  const totPipe=pipe.reduce((a,b)=>a+b.value,0);const totAct=pipe.reduce((a,b)=>a+b.count,0);
+
+  const IS={width:"100%",background:"#0F172A",border:"1px solid #334155",color:"#E2E8F0",padding:"8px",borderRadius:6,fontSize:14,boxSizing:"border-box"};
+  const LS={fontSize:12,color:"#94A3B8",display:"block",marginBottom:3};
+
+  return(
+    <div style={{minHeight:"100vh"}}>
+      {toast&&<div style={{position:"fixed",top:20,right:20,zIndex:1000,background:toast.t==="success"?"#059669":"#3B82F6",color:"#fff",padding:"12px 20px",borderRadius:10,fontSize:14,fontWeight:500,boxShadow:"0 8px 30px rgba(0,0,0,.3)",animation:"slideIn .3s ease"}}>{toast.m}</div>}
+
+      {/* Header */}
+      <div style={{background:"linear-gradient(135deg,#1E293B,#0F172A)",borderBottom:"1px solid #1E293B",padding:"16px 24px"}}>
+        <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",flexWrap:"wrap",gap:10}}>
+          <div>
+            <div style={{fontSize:20,fontWeight:700,color:"#F8FAFC",letterSpacing:"-.02em"}}>Silverthin Project Tracker</div>
+            <div style={{fontSize:13,color:"#64748B",marginTop:2}}>
+              {isManager?<span style={{color:"#A78BFA"}}>Manager View</span>:<span style={{color:"#3B82F6"}}>{user}</span>}
+              {" "}&middot; {totAct} active &middot; Pipeline: {fmt(totPipe)}
+              {saving&&<span style={{color:"#3B82F6",marginLeft:8}}>Saving...</span>}
+            </div>
+          </div>
+          <div style={{display:"flex",gap:8,flexWrap:"wrap",alignItems:"center"}}>
+            <button onClick={()=>setView(v=>v==="list"?"pipeline":"list")} style={{background:"#1E293B",border:"1px solid #334155",color:"#E2E8F0",padding:"7px 14px",borderRadius:8,cursor:"pointer",fontSize:13,fontWeight:500}}>{view==="list"?"Pipeline":"List"}</button>
+            <button onClick={()=>{setAdding(true);setNewP({})}} style={{background:"#3B82F6",border:"none",color:"#fff",padding:"7px 14px",borderRadius:8,cursor:"pointer",fontSize:13,fontWeight:600}}>+ New</button>
+            {isManager&&<button onClick={resetAll} style={{background:"transparent",border:"1px solid #334155",color:"#94A3B8",padding:"7px 10px",borderRadius:8,cursor:"pointer",fontSize:12}}>Reset</button>}
+            <button onClick={handleLogout} style={{background:"transparent",border:"1px solid #475569",color:"#94A3B8",padding:"7px 14px",borderRadius:8,cursor:"pointer",fontSize:12}}>Switch User</button>
+          </div>
+        </div>
+        <div style={{display:"flex",gap:8,marginTop:12,flexWrap:"wrap"}}>
+          {isManager&&<select value={repFilter} onChange={e=>setRepFilter(e.target.value)} style={{background:"#1E293B",border:"1px solid #334155",color:"#E2E8F0",padding:"7px 10px",borderRadius:8,fontSize:13}}><option value="__all__">All Reps</option>{REPS.map(r=><option key={r} value={r}>{r}</option>)}</select>}
+          <select value={fStatus} onChange={e=>setFStatus(e.target.value)} style={{background:"#1E293B",border:"1px solid #334155",color:"#E2E8F0",padding:"7px 10px",borderRadius:8,fontSize:13}}><option value="__all__">All Statuses</option>{STATUSES.map(s=><option key={s} value={s}>{s}</option>)}</select>
+          <input type="text" placeholder="Search..." value={search} onChange={e=>setSearch(e.target.value)} style={{background:"#1E293B",border:"1px solid #334155",color:"#E2E8F0",padding:"7px 10px",borderRadius:8,fontSize:13,flex:1,minWidth:160}}/>
+        </div>
+      </div>
+
+      {/* Add Modal */}
+      {adding&&<div style={{position:"fixed",inset:0,background:"rgba(0,0,0,.6)",zIndex:100,display:"flex",justifyContent:"center",alignItems:"flex-start",paddingTop:60,overflowY:"auto"}} onClick={e=>{if(e.target===e.currentTarget)setAdding(false)}}>
+        <div style={{background:"#1E293B",border:"1px solid #334155",borderRadius:16,padding:28,width:"90%",maxWidth:500}}>
+          <div style={{fontSize:18,fontWeight:700,marginBottom:20}}>New Project</div>
+          {isManager&&<div style={{marginBottom:12}}><label style={LS}>Rep</label><select value={newP.rep||(repFilter!=="__all__"?repFilter:REPS[0])} onChange={e=>setNewP({...newP,rep:e.target.value})} style={IS}>{REPS.map(r=><option key={r} value={r}>{r}</option>)}</select></div>}
+          {[{k:"customer",l:"Customer *",t:"text"},{k:"application",l:"Application",t:"text"},{k:"productType",l:"Product Type",t:"select",o:PTYPES},{k:"partNumber",l:"Part #",t:"text"},{k:"opportunitySize",l:"Opportunity Size ($)",t:"number"}].map(f=><div key={f.k} style={{marginBottom:12}}><label style={LS}>{f.l}</label>{f.t==="select"?<select value={newP[f.k]||f.o[0]} onChange={e=>setNewP({...newP,[f.k]:e.target.value})} style={IS}>{f.o.map(o=><option key={o} value={o}>{o}</option>)}</select>:<input type={f.t} value={newP[f.k]||""} onChange={e=>setNewP({...newP,[f.k]:e.target.value})} style={IS}/>}</div>)}
+          <div style={{display:"flex",gap:10,marginTop:20}}><button onClick={addProj} style={{flex:1,background:"#3B82F6",border:"none",color:"#fff",padding:"10px",borderRadius:8,cursor:"pointer",fontSize:14,fontWeight:600}}>Add Project</button><button onClick={()=>setAdding(false)} style={{flex:1,background:"#334155",border:"none",color:"#E2E8F0",padding:"10px",borderRadius:8,cursor:"pointer",fontSize:14}}>Cancel</button></div>
+        </div>
+      </div>}
+
+      {/* History Modal */}
+      {histId!==null&&<div style={{position:"fixed",inset:0,background:"rgba(0,0,0,.6)",zIndex:100,display:"flex",justifyContent:"center",alignItems:"flex-start",paddingTop:60,overflowY:"auto"}} onClick={e=>{if(e.target===e.currentTarget)setHistId(null)}}>
+        <div style={{background:"#1E293B",border:"1px solid #334155",borderRadius:16,padding:28,width:"90%",maxWidth:560}}>
+          <div style={{fontSize:18,fontWeight:700,marginBottom:4}}>Update History: {projects.find(p=>p.id===histId)?.customer}</div>
+          <div style={{fontSize:13,color:"#64748B",marginBottom:20}}>All changes tracked</div>
+          {histData.length===0?<div style={{color:"#64748B",fontSize:14,padding:20,textAlign:"center"}}>No updates recorded yet</div>:
+          <div style={{display:"flex",flexDirection:"column",gap:12,maxHeight:400,overflowY:"auto"}}>{[...histData].reverse().map((h,i)=><div key={i} style={{background:"#0F172A",borderRadius:10,padding:14,border:"1px solid #334155"}}>
+            <div style={{fontSize:12,color:"#3B82F6",fontWeight:600,fontFamily:"'JetBrains Mono',monospace",marginBottom:8}}>{h.date}{h.changedBy&&<span style={{color:"#64748B",fontWeight:400}}> by {h.changedBy==="__manager__"?"Manager":h.changedBy}</span>}</div>
+            {h.prevStatus!==h.newStatus&&<div style={{fontSize:13,marginBottom:4}}><span style={{color:"#94A3B8"}}>Status: </span><span style={{color:"#EF4444",textDecoration:"line-through"}}>{h.prevStatus?.split(". ")[1]}</span> <span style={{color:"#64748B"}}>&rarr;</span> <span style={{color:"#10B981"}}>{h.newStatus?.split(". ")[1]}</span></div>}
+            {h.prevConfidence!==h.newConfidence&&<div style={{fontSize:13,marginBottom:4}}><span style={{color:"#94A3B8"}}>Confidence: </span><span style={{color:"#EF4444"}}>{h.prevConfidence||"None"}</span> <span style={{color:"#64748B"}}>&rarr;</span> <span style={{color:"#10B981"}}>{h.newConfidence||"None"}</span></div>}
+            {h.newUpdate&&h.prevUpdate!==h.newUpdate&&<div style={{fontSize:13,marginTop:6,color:"#CBD5E1",lineHeight:1.5}}><span style={{color:"#94A3B8"}}>Update: </span>{h.newUpdate}</div>}
+          </div>)}</div>}
+          <button onClick={()=>setHistId(null)} style={{marginTop:16,width:"100%",background:"#334155",border:"none",color:"#E2E8F0",padding:"10px",borderRadius:8,cursor:"pointer",fontSize:14}}>Close</button>
+        </div>
+      </div>}
+
+      {/* Main */}
+      <div style={{padding:"16px 24px",paddingBottom:80}}>
+        {view==="pipeline"?<div style={{display:"grid",gridTemplateColumns:"repeat(auto-fill,minmax(260px,1fr))",gap:12}}>
+          {pipe.map(col=><div key={col.status} style={{background:"#1E293B",borderRadius:12,border:"1px solid #334155",overflow:"hidden"}}>
+            <div style={{padding:"10px 14px",borderBottom:"1px solid #334155",display:"flex",justifyContent:"space-between",alignItems:"center"}}>
+              <div><div style={{fontSize:13,fontWeight:600,color:SC[col.status]?.tx}}>{col.status.split(". ")[1]}</div><div style={{fontSize:12,color:"#64748B"}}>{col.count} &middot; {fmt(col.value)}</div></div>
+              <div style={{background:SC[col.status]?.bg,color:SC[col.status]?.tx,padding:"2px 8px",borderRadius:20,fontSize:13,fontWeight:700}}>{col.count}</div>
+            </div>
+            <div style={{padding:6,maxHeight:400,overflowY:"auto"}}>
+              {pipeSource.filter(p=>p.status===col.status).map(p=><div key={p.id} onClick={()=>startEdit(p)} style={{background:"#0F172A",borderRadius:8,padding:10,marginBottom:4,cursor:"pointer",border:"1px solid transparent",transition:"border-color .15s"}} onMouseEnter={e=>e.currentTarget.style.borderColor="#334155"} onMouseLeave={e=>e.currentTarget.style.borderColor="transparent"}>
+                <div style={{fontSize:13,fontWeight:600,color:"#F8FAFC"}}>{p.customer}</div>
+                {isManager&&<div style={{fontSize:11,color:"#64748B"}}>{p.rep}</div>}
+                {p.opportunitySize>0&&<div style={{fontSize:12,color:"#3B82F6",fontWeight:500,marginTop:2}}>{fmt(p.opportunitySize)}</div>}
+              </div>)}
+            </div>
+          </div>)}
+        </div>:
+        <div>
+          <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:12}}>
+            <div style={{fontSize:13,color:"#64748B"}}>Showing {filtered.length} projects</div>
+            <div style={{display:"flex",gap:6,flexWrap:"wrap"}}>
+              {[{f:"customer",l:"Customer"},{f:"status",l:"Status"},{f:"opportunitySize",l:"Value"},{f:"confidence",l:"Confidence"}].map(s=><button key={s.f} onClick={()=>{if(sortF===s.f)setSortD(d=>d==="asc"?"desc":"asc");else{setSortF(s.f);setSortD("asc")}}} style={{background:sortF===s.f?"#334155":"transparent",border:"1px solid #334155",color:sortF===s.f?"#E2E8F0":"#64748B",padding:"3px 8px",borderRadius:6,cursor:"pointer",fontSize:11}}>{s.l}{sortF===s.f&&(sortD==="asc"?" \u2191":" \u2193")}</button>)}
+            </div>
+          </div>
+          <div style={{display:"flex",flexDirection:"column",gap:8}}>
+            {filtered.map(p=>{
+              const isE=editId===p.id;const sc=SC[p.status]||SC["1. New Opportunity"];
+              if(isE)return<div key={p.id} style={{background:"#1E293B",borderRadius:12,border:"2px solid #3B82F6",padding:20}}>
+                <div style={{fontSize:16,fontWeight:700,marginBottom:16,color:"#F8FAFC"}}>Editing: {ed.customer}</div>
+                <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:12}}>
+                  {[{k:"customer",l:"Customer"},{k:"application",l:"Application"}].map(f=><div key={f.k}><label style={LS}>{f.l}</label><input value={ed[f.k]||""} onChange={e=>setEd({...ed,[f.k]:e.target.value})} style={IS}/></div>)}
+                  <div><label style={LS}>Status</label><select value={ed.status} onChange={e=>setEd({...ed,status:e.target.value})} style={IS}>{STATUSES.map(s=><option key={s} value={s}>{s}</option>)}</select></div>
+                  <div><label style={LS}>Confidence</label><select value={ed.confidence} onChange={e=>setEd({...ed,confidence:e.target.value})} style={IS}><option value="">Not Set</option>{CONF.map(c=><option key={c} value={c}>{c}</option>)}</select></div>
+                  {[{k:"partNumber",l:"Part #"},{k:"quoteNumber",l:"Quote #"}].map(f=><div key={f.k}><label style={LS}>{f.l}</label><input value={ed[f.k]||""} onChange={e=>setEd({...ed,[f.k]:e.target.value})} style={IS}/></div>)}
+                  <div><label style={LS}>Opportunity Size ($)</label><input type="number" value={ed.opportunitySize||0} onChange={e=>setEd({...ed,opportunitySize:Number(e.target.value)})} style={IS}/></div>
+                  <div><label style={LS}>Close Date</label><input type="date" value={ed.closeDate||""} onChange={e=>setEd({...ed,closeDate:e.target.value})} style={IS}/></div>
+                  <div><label style={LS}>Last Visit</label><input type="date" value={ed.lastVisit||""} onChange={e=>setEd({...ed,lastVisit:e.target.value})} style={IS}/></div>
+                  <div><label style={LS}>Competitor</label><input value={ed.competitor||""} onChange={e=>setEd({...ed,competitor:e.target.value})} style={IS}/></div>
+                  <div><label style={LS}>Product Type</label><select value={ed.productType} onChange={e=>setEd({...ed,productType:e.target.value})} style={IS}>{PTYPES.map(t=><option key={t} value={t}>{t}</option>)}</select></div>
+                  <div><label style={LS}>Distributor</label><input value={ed.distributor||""} onChange={e=>setEd({...ed,distributor:e.target.value})} style={IS}/></div>
+                </div>
+                <div style={{marginTop:12}}><label style={LS}>Update / Notes</label><textarea value={ed.update||""} onChange={e=>setEd({...ed,update:e.target.value})} rows={3} placeholder="What's the latest on this project?" style={{...IS,resize:"vertical"}}/></div>
+                <div style={{display:"flex",gap:10,marginTop:16}}>
+                  <button onClick={saveEdit} style={{flex:1,background:"#059669",border:"none",color:"#fff",padding:"10px",borderRadius:8,cursor:"pointer",fontSize:14,fontWeight:600}}>{saving?"Saving...":"Save Changes"}</button>
+                  <button onClick={()=>setEditId(null)} style={{flex:1,background:"#334155",border:"none",color:"#E2E8F0",padding:"10px",borderRadius:8,cursor:"pointer",fontSize:14}}>Cancel</button>
+                </div>
+              </div>;
+              return<div key={p.id} style={{background:"#1E293B",borderRadius:10,border:"1px solid #334155",padding:"14px 16px",display:"flex",flexDirection:"column",gap:8,transition:"border-color .15s"}} onMouseEnter={e=>e.currentTarget.style.borderColor="#475569"} onMouseLeave={e=>e.currentTarget.style.borderColor="#334155"}>
+                <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",gap:8}}>
+                  <div style={{flex:1,minWidth:0}}>
+                    <div style={{fontSize:15,fontWeight:700,color:"#F8FAFC",marginBottom:2}}>{p.customer}</div>
+                    <div style={{fontSize:12,color:"#64748B"}}>{isManager?`${p.rep} \u00B7 `:""}{p.application?`${p.application} \u00B7 `:""}{p.productType||""}</div>
+                  </div>
+                  <div style={{display:"flex",gap:6,alignItems:"center",flexShrink:0}}>
+                    <span style={{background:sc.bg,color:sc.tx,border:`1px solid ${sc.br}`,padding:"3px 10px",borderRadius:20,fontSize:11,fontWeight:600,whiteSpace:"nowrap"}}>{p.status.split(". ")[1]}</span>
+                    {p.confidence&&<span style={{background:p.confidence==="High"?"#D1FAE5":p.confidence==="Medium"?"#FEF9C3":"#FEE2E2",color:p.confidence==="High"?"#065F46":p.confidence==="Medium"?"#854D0E":"#991B1B",padding:"3px 8px",borderRadius:20,fontSize:11,fontWeight:600}}>{p.confidence}</span>}
+                  </div>
+                </div>
+                <div style={{display:"flex",gap:16,fontSize:12,color:"#94A3B8",flexWrap:"wrap"}}>
+                  {p.opportunitySize>0&&<span style={{color:"#3B82F6",fontWeight:600}}>{fmt(p.opportunitySize)}</span>}
+                  {p.partNumber&&<span>P/N: {p.partNumber}</span>}
+                  {p.quoteNumber&&<span>Q#: {p.quoteNumber}</span>}
+                  {p.closeDate&&<span>Close: {p.closeDate}</span>}
+                  {p.city&&<span>{p.city}{p.state?`, ${p.state}`:""}</span>}
+                </div>
+                {p.update&&<div style={{fontSize:13,color:"#CBD5E1",lineHeight:1.5,background:"#0F172A",borderRadius:6,padding:"8px 10px",borderLeft:"3px solid #334155"}}>{p.update}</div>}
+                <div style={{display:"flex",gap:8,marginTop:2}}>
+                  <button onClick={()=>startEdit(p)} style={{background:"#334155",border:"none",color:"#E2E8F0",padding:"6px 14px",borderRadius:6,cursor:"pointer",fontSize:12,fontWeight:500}}>Edit / Update</button>
+                  <button onClick={()=>openHist(p.id)} style={{background:"transparent",border:"1px solid #334155",color:"#94A3B8",padding:"6px 14px",borderRadius:6,cursor:"pointer",fontSize:12}}>History</button>
+                </div>
+              </div>;
+            })}
+          </div>
+        </div>}
+      </div>
+    </div>
+  );
+}
+
+ReactDOM.createRoot(document.getElementById('root')).render(<App/>);
+  </script>
+</body>
+</html>
