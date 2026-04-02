@@ -152,7 +152,10 @@ function App() {
   const FUNNEL_STAGES = ["1. New Opportunity","2. Quoting","3. Technical Discussion","4. Prototypes Ordered","5. Testing","6. Awaiting Production PO"];
   const pipe=FUNNEL_STAGES.map(s=>{const items=pipeSource.filter(p=>p.status===s);return{status:s,count:items.length,value:items.reduce((a,b)=>a+(Number(b.opportunitySize)||0),0)}});
   const totPipe=pipe.reduce((a,b)=>a+b.value,0);const totAct=pipe.reduce((a,b)=>a+b.count,0);
+  // Funnel widths: proportional to dollar value using sqrt scale for visual clarity
   const maxFunnelVal = Math.max(...pipe.map(p=>p.value),1);
+  const funnelWidths = {};
+  pipe.forEach(s=>{funnelWidths[s.status] = s.value>0 ? Math.max(Math.sqrt(s.value/maxFunnelVal)*100, 20) : 20});
 
   const IS={width:"100%",background:"#0F172A",border:"1px solid #334155",color:"#E2E8F0",padding:"8px",borderRadius:6,fontSize:14,boxSizing:"border-box"};
   const LS={fontSize:12,color:"#94A3B8",display:"block",marginBottom:3};
@@ -218,7 +221,7 @@ function App() {
           {/* Funnel */}
           <div style={{display:"flex",flexDirection:"column",alignItems:"center",marginBottom:24,gap:0}}>
             {pipe.map((stage,i)=>{
-              const widthPct = Math.max(stage.value / maxFunnelVal * 100, 15);
+              const widthPct = funnelWidths[stage.status] || 30;
               const sc = SC[stage.status];
               const isHovered = hoverFunnel === stage.status;
               const isActive = fStatus === stage.status;
