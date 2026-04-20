@@ -1,4 +1,4 @@
-const { initPasswords, getCorrectPassword } = require("./db");
+const { initPasswords, getCorrectPassword, logLogin } = require("./db");
 
 module.exports = async function handler(req, res) {
   if (req.method !== "POST") return res.status(405).json({ error: "Method not allowed" });
@@ -10,5 +10,7 @@ module.exports = async function handler(req, res) {
   const correct = await getCorrectPassword(rep);
 
   if (!correct) return res.status(401).json({ ok: false });
-  return res.json({ ok: password === correct });
+  const ok = password === correct;
+  if (ok) await logLogin(rep);
+  return res.json({ ok });
 };

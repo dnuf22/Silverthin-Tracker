@@ -130,6 +130,7 @@ function App() {
   const [pwForm, setPwForm] = useState({current:"", next:"", confirm:""});
   const [pwErr, setPwErr] = useState(null);
   const [pwBusy, setPwBusy] = useState(false);
+  const [loginLog, setLoginLog] = useState([]);
 
   const isManager = user === "__manager__";
   const flash = useCallback((m,t="success")=>{setToast({m,t});setTimeout(()=>setToast(null),3000)},[]);
@@ -138,6 +139,15 @@ function App() {
   useEffect(()=>{
     fetch(API+'/projects').then(r=>r.json()).then(data=>{setProjects(data);setLoading(false)}).catch(()=>setLoading(false));
   },[]);
+
+  // Load login history when manager is signed in
+  useEffect(()=>{
+    if(user==="__manager__"){
+      fetch(API+'/logins').then(r=>r.json()).then(data=>setLoginLog(Array.isArray(data)?data:[])).catch(()=>{});
+    } else {
+      setLoginLog([]);
+    }
+  },[user]);
 
   // Compute counts for login screen
   const projectCounts = {};
@@ -458,6 +468,38 @@ function App() {
               </div>;
             })}
           </div>
+        </div>}
+
+        {isManager&&<div style={{marginTop:48,borderTop:"1px solid #1E293B",paddingTop:32}}>
+          <div style={{fontSize:15,fontWeight:700,color:"#F8FAFC",marginBottom:4}}>Login History</div>
+          <div style={{fontSize:12,color:"#64748B",marginBottom:16}}>All representative sign-ins, most recent first</div>
+          {loginLog.length===0
+            ?<div style={{color:"#64748B",fontSize:13,padding:"20px 0"}}>No logins recorded yet.</div>
+            :<div style={{background:"#1E293B",borderRadius:12,border:"1px solid #334155",overflow:"hidden"}}>
+              <div style={{overflowX:"auto"}}>
+                <table style={{width:"100%",borderCollapse:"collapse",fontSize:13}}>
+                  <thead>
+                    <tr style={{borderBottom:"1px solid #334155"}}>
+                      <th style={{padding:"10px 20px",textAlign:"left",color:"#94A3B8",fontWeight:600,fontSize:12,whiteSpace:"nowrap"}}>Representative</th>
+                      <th style={{padding:"10px 20px",textAlign:"left",color:"#94A3B8",fontWeight:600,fontSize:12,whiteSpace:"nowrap"}}>Date</th>
+                      <th style={{padding:"10px 20px",textAlign:"left",color:"#94A3B8",fontWeight:600,fontSize:12,whiteSpace:"nowrap"}}>Time</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {loginLog.map((entry,i)=>{
+                      const dt=new Date(entry.logged_at);
+                      const isMgr=entry.rep==="__manager__";
+                      return <tr key={i} style={{borderBottom:"1px solid #0F172A",background:i%2===0?"#0F172A22":"transparent"}}>
+                        <td style={{padding:"10px 20px",color:isMgr?"#A78BFA":"#E2E8F0",fontWeight:isMgr?600:400}}>{isMgr?"Manager":entry.rep}</td>
+                        <td style={{padding:"10px 20px",color:"#94A3B8"}}>{dt.toLocaleDateString("en-US",{month:"short",day:"numeric",year:"numeric"})}</td>
+                        <td style={{padding:"10px 20px",color:"#94A3B8",fontFamily:"'JetBrains Mono',monospace",fontSize:12}}>{dt.toLocaleTimeString("en-US",{hour:"2-digit",minute:"2-digit",hour12:true})}</td>
+                      </tr>;
+                    })}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          }
         </div>}
       </div>
     </div>

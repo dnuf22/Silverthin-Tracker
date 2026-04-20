@@ -30,4 +30,22 @@ async function getCorrectPassword(rep) {
   return process.env[key] || null;
 }
 
-module.exports = { getDb, initPasswords, getCorrectPassword };
+async function initLoginLog() {
+  const db = getDb();
+  await db.execute(`CREATE TABLE IF NOT EXISTS login_log (id INTEGER PRIMARY KEY AUTOINCREMENT, rep TEXT NOT NULL, logged_at TEXT NOT NULL)`);
+}
+
+async function logLogin(rep) {
+  await initLoginLog();
+  const db = getDb();
+  await db.execute({ sql: "INSERT INTO login_log (rep, logged_at) VALUES (?, ?)", args: [rep, new Date().toISOString()] });
+}
+
+async function getLoginLog() {
+  await initLoginLog();
+  const db = getDb();
+  const result = await db.execute("SELECT rep, logged_at FROM login_log ORDER BY logged_at DESC LIMIT 500");
+  return result.rows.map(r => ({ rep: r.rep, logged_at: r.logged_at }));
+}
+
+module.exports = { getDb, initPasswords, getCorrectPassword, logLogin, getLoginLog };
