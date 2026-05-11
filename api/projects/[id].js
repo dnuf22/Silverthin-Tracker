@@ -1,4 +1,4 @@
-const { getDb } = require("../db");
+const { getDb, initHistory } = require("../db");
 
 module.exports = async function handler(req, res) {
   const db = getDb();
@@ -11,6 +11,7 @@ module.exports = async function handler(req, res) {
   }
 
   if (req.method === "PUT") {
+    await initHistory();
     const old = await db.execute({ sql: "SELECT * FROM projects WHERE id = ?", args: [id] });
     if (old.rows.length === 0) return res.status(404).json({ error: "Not found" });
 
@@ -19,9 +20,17 @@ module.exports = async function handler(req, res) {
     const now = new Date().toISOString().split("T")[0];
 
     await db.execute({
-      sql: `INSERT INTO history (projectId, date, prevStatus, newStatus, prevUpdate, newUpdate, prevConfidence, newConfidence, changedBy)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-      args: [id, now, prev.status, p.status, prev.update, p.update, prev.confidence, p.confidence, p.changedBy || ""],
+      sql: `INSERT INTO history (projectId, date, prevStatus, newStatus, prevUpdate, newUpdate, prevConfidence, newConfidence, prevOpportunitySize, newOpportunitySize, changedBy)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      args: [
+        id, now,
+        prev.status, p.status,
+        prev.update, p.update,
+        prev.confidence, p.confidence,
+        Number(prev.opportunitySize) || 0,
+        Number(p.opportunitySize) || 0,
+        p.changedBy || "",
+      ],
     });
 
     await db.execute({
