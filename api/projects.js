@@ -1,4 +1,4 @@
-const { getDb } = require("./db");
+const { getDb, initHistory } = require("./db");
 
 module.exports = async function handler(req, res) {
   const db = getDb();
@@ -25,6 +25,22 @@ module.exports = async function handler(req, res) {
     const created = await db.execute({
       sql: "SELECT * FROM projects WHERE id = ?",
       args: [Number(result.lastInsertRowid)],
+    });
+    await initHistory();
+    const newId = Number(result.lastInsertRowid);
+    const today = new Date().toISOString().split("T")[0];
+    await db.execute({
+      sql: `INSERT INTO history (projectId, date, prevStatus, newStatus, prevUpdate, newUpdate, prevConfidence, newConfidence, prevOpportunitySize, newOpportunitySize, changedBy)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      args: [
+        newId, today,
+        "", p.status || "1. New Opportunity",
+        "", p.update || "",
+        "", p.confidence || "",
+        0,
+        Number(p.opportunitySize) || 0,
+        p.changedBy || p.rep || "",
+      ],
     });
     return res.status(201).json(created.rows[0]);
   }
