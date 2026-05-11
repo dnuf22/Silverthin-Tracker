@@ -127,7 +127,7 @@ A "Compare to" row rendered inside the pipeline view block, above the charts:
 ```
 
 - Populated from `availableMonths` fetched on pipeline view mount.
-- On change: fetch `/api/pipeline/snapshot?date=<last-day-of-month>`, store in `compareData`.
+- On change: fetch `/api/pipeline/snapshot?date=<last-day-of-month>`, store in `compareData`. Last day is computed client-side as `new Date(year, month, 0).toISOString().split('T')[0]` (e.g. "April 2026" → "2026-04-30").
 - A "Clear" option resets `compareMonth` and `compareData` to null.
 - When `compareData` is null the charts render exactly as they do today.
 
@@ -165,7 +165,7 @@ When `compareData` is set:
    <div style={{
      position: "absolute", top: 0,
      left: "50%", transform: "translateX(-50%)",
-     width: `${prevWidthPct / currentWidthPct * 100}%`,
+     width: `${currentWidthPct > 0 ? (prevWidthPct / currentWidthPct * 100) : prevWidthPct}%`,
      height: "100%",
      border: "2px solid #F59E0B",
      borderRadius: "inherit",
@@ -198,7 +198,7 @@ The dropdown should show only months for which the snapshot reconstruction would
 ```sql
 SELECT DISTINCT substr(date, 1, 7) AS ym
 FROM history
-WHERE date < substr(date('now'), 1, 7)   -- exclude current month
+WHERE substr(date, 1, 7) < substr(date('now'), 1, 7)   -- exclude current month
 ORDER BY ym DESC
 ```
 
@@ -217,7 +217,7 @@ If no history rows exist yet for a month, the snapshot falls back entirely to cu
 
 | File | Change |
 |------|--------|
-| `api/db.js` | Add `initHistory()` helper that ALTERs table to add new columns if missing |
+| `api/db.js` | Add `initHistory()` helper that ALTERs table to add new columns if missing (wrapped in try/catch — SQLite has no `ADD COLUMN IF NOT EXISTS`) |
 | `api/projects.js` | Write initial history entry on project creation |
 | `api/projects/[id].js` | Add `prevOpportunitySize` / `newOpportunitySize` to history INSERT |
 | `api/pipeline/snapshot.js` | New endpoint — reconstruct pipeline state for a given date |
