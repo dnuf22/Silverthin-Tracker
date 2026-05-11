@@ -259,9 +259,21 @@ function App() {
   const pipe=FUNNEL_STAGES.map(s=>{const items=pipeSource.filter(p=>p.status===s);return{status:s,count:items.length,value:items.reduce((a,b)=>a+(Number(b.opportunitySize)||0),0)}});
   const totPipe=pipe.reduce((a,b)=>a+b.value,0);const totAct=pipe.reduce((a,b)=>a+b.count,0);
   // Funnel widths: proportional to dollar value using sqrt scale for visual clarity
-  const maxFunnelVal = Math.max(...pipe.map(p=>p.value),1);
+  const prevByStage = compareData
+    ? Object.fromEntries((compareData.byStage||[]).map(s=>[s.status,s]))
+    : {};
+  const maxFunnelVal = Math.max(
+    ...pipe.map(p=>p.value),
+    ...(compareData ? (compareData.byStage||[]).map(s=>s.value) : []),
+    1
+  );
   const funnelWidths = {};
   pipe.forEach(s=>{funnelWidths[s.status] = s.value>0 ? Math.max(Math.sqrt(s.value/maxFunnelVal)*100, 20) : 20});
+  const prevFunnelWidths = {};
+  FUNNEL_STAGES.forEach(s=>{
+    const pv = prevByStage[s]?.value||0;
+    prevFunnelWidths[s] = pv>0 ? Math.max(Math.sqrt(pv/maxFunnelVal)*100, 20) : 0;
+  });
 
   const IS={width:"100%",background:"#0F172A",border:"1px solid #334155",color:"#E2E8F0",padding:"8px",borderRadius:6,fontSize:14,boxSizing:"border-box"};
   const LS={fontSize:12,color:"#94A3B8",display:"block",marginBottom:3};
@@ -412,10 +424,57 @@ function App() {
                       <div style={{fontWeight:600,color:sc.tx}}>{fmt(stage.value)}</div>
                       <div style={{color:"#94A3B8",marginTop:2}}>{stage.count} project{stage.count!==1?"s":""}</div>
                     </div>}
+                    {compareData&&prevFunnelWidths[stage.status]>0&&<div style={{
+                      position:"absolute",top:0,
+                      left:"50%",transform:"translateX(-50%)",
+                      width:`${funnelWidths[stage.status]>0
+                        ? (prevFunnelWidths[stage.status]/funnelWidths[stage.status]*100)
+                        : prevFunnelWidths[stage.status]}%`,
+                      height:"100%",
+                      border:"2px solid #F59E0B",
+                      borderRadius:"inherit",
+                      background:"transparent",
+                      pointerEvents:"none",
+                      boxSizing:"border-box",
+                      opacity:0.75,
+                    }}/>}
                   </div>
                 </div>;
               })}
+              {compareData&&(()=>{
+                const curTotal=pipe.reduce((a,b)=>a+b.value,0);
+                const prevTotal=compareData.totalValue||0;
+                const delta=curTotal-prevTotal;
+                const [cy,cm]=compareMonth.split('-').map(Number);
+                const prevLabel=new Date(cy,cm-1).toLocaleString('en-US',{month:'long',year:'numeric'});
+                const curLabel=new Date().toLocaleString('en-US',{month:'long',year:'numeric'});
+                return <div style={{marginTop:14,display:"flex",flexDirection:"column",gap:3,alignItems:"center"}}>
+                  <div style={{display:"flex",alignItems:"center",gap:8,fontSize:13}}>
+                    <div style={{width:14,height:14,borderRadius:3,background:"linear-gradient(90deg,#3B82F6,#60A5FA)",flexShrink:0}}/>
+                    <span style={{color:"#94A3B8",fontWeight:500}}>{curLabel}</span>
+                    <span style={{color:"#F8FAFC",fontWeight:700}}>{fmt(curTotal)}</span>
+                    <span style={{fontSize:11,fontWeight:700,padding:"1px 7px",borderRadius:10,background:delta>=0?"#064E3B":"#450A0A",color:delta>=0?"#10B981":"#EF4444"}}>
+                      {delta>=0?"▲ +":"▼ "}{fmt(Math.abs(delta))}
+                    </span>
+                  </div>
+                  <div style={{display:"flex",alignItems:"center",gap:8,fontSize:13}}>
+                    <div style={{width:14,height:14,borderRadius:3,border:"2px solid #F59E0B",background:"transparent",flexShrink:0,boxSizing:"border-box"}}/>
+                    <span style={{color:"#94A3B8",fontWeight:500}}>{prevLabel}</span>
+                    <span style={{color:"#F8FAFC",fontWeight:700}}>{fmt(prevTotal)}</span>
+                  </div>
+                </div>;
+              })()}
               {fStatus!=="__all__"&&FUNNEL_STAGES.includes(fStatus)&&<button onClick={()=>setFStatus("__all__")} style={{marginTop:10,background:"transparent",border:"1px solid #334155",color:"#94A3B8",padding:"4px 12px",borderRadius:6,cursor:"pointer",fontSize:11}}>Clear filter</button>}
+              {compareData&&<div style={{display:"flex",gap:14,marginTop:10,justifyContent:"center",flexWrap:"wrap"}}>
+                <div style={{display:"flex",alignItems:"center",gap:5,fontSize:11,color:"#94A3B8"}}>
+                  <div style={{width:18,height:9,borderRadius:2,background:"linear-gradient(90deg,#3B82F6,#60A5FA)"}}/>
+                  Current ({new Date().toLocaleString('en-US',{month:'short',year:'numeric'})})
+                </div>
+                <div style={{display:"flex",alignItems:"center",gap:5,fontSize:11,color:"#94A3B8"}}>
+                  <div style={{width:18,height:9,borderRadius:2,border:"2px solid #F59E0B",background:"transparent"}}/>
+                  {new Date(Number(compareMonth.split('-')[0]),Number(compareMonth.split('-')[1])-1).toLocaleString('en-US',{month:'long',year:'numeric'})}
+                </div>
+              </div>}
             </div>
             {/* Rep Bar Chart */}
             {(()=>{
