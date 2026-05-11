@@ -48,4 +48,14 @@ async function getLoginLog() {
   return result.rows.map(r => ({ rep: r.rep, logged_at: r.logged_at }));
 }
 
-module.exports = { getDb, initPasswords, getCorrectPassword, logLogin, getLoginLog };
+async function initHistory() {
+  const db = getDb();
+  try {
+    await db.execute(`ALTER TABLE history ADD COLUMN prevOpportunitySize REAL`);
+  } catch (_) {}
+  try {
+    await db.execute(`ALTER TABLE history ADD COLUMN newOpportunitySize REAL`);
+  } catch (_) {}
+}
+
+module.exports = { getDb, initPasswords, getCorrectPassword, logLogin, getLoginLog, initHistory };
